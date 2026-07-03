@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TrendingUp } from "lucide-react";
 import {
     formatKickoff,
@@ -31,7 +32,7 @@ export function MarketCard({
     return (
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-border/70">
 
-            <div className="flex items-start gap-3">
+            <Link href={`/market/${market.id}`} className="flex items-start gap-3">
                 <MatchAvatar home={market.home} away={market.away} />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="font-mono text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
@@ -41,7 +42,7 @@ export function MarketCard({
                         {market.home} <span className="text-muted-foreground">vs</span> {market.away}
                     </span>
                 </div>
-            </div>
+            </Link>
 
 
             <div className="grid grid-cols-3 gap-2">
@@ -56,7 +57,7 @@ export function MarketCard({
                             disabled={resolved}
                             onClick={() => onPick(market, o)}
                             className={cn(
-                                "flex items-center justify-center gap-1.5 rounded-sm border px-3 py-3 text-sm font-semibold transition-colors",
+                                "flex items-center justify-center gap-1.5 rounded-sm border px-3 py-2.5 text-sm font-semibold transition-colors",
                                 OUTCOME_TINT[o.key],
                                 isWinner && "[#18251C]",
                                 isLoser && "[#2A191A]"

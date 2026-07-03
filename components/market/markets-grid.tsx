@@ -1,22 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { type Market, type Outcome } from "@/lib/markets/types";
 import { fixtureToMarket } from "@/lib/markets/from-fixtures";
 import { useTxlineCreds } from "@/lib/txline/creds";
 import { useFixtures } from "@/lib/txline/queries";
 import { MarketCard } from "./market-card";
 import { MarketCardSkeleton } from "./market-card-skeleton";
-import { BetSheet } from "./bet-sheet";
 import { cn } from "@/lib/utils";
 
 export function MarketsGrid() {
+    const router = useRouter();
     const creds = useTxlineCreds();
     const [markets, setMarkets] = useState<Market[]>([]);
 
     const [filter, setFilter] = useState<string>("All");
-    const [selection, setSelection] = useState<{ market: Market; outcome: Outcome } | null>(null);
-    const [sheetOpen, setSheetOpen] = useState(false);
 
     const fixtures = useFixtures(creds);
 
@@ -46,27 +45,7 @@ export function MarketsGrid() {
     const visible = markets.filter(matchesFilter);
 
     function pick(market: Market, outcome: Outcome) {
-        setSelection({ market, outcome });
-        setSheetOpen(true);
-    }
-
-    // Locally bump the pool so the UI reacts to a bet (no chain yet).
-    function place(stake: number) {
-        if (!selection) return;
-        const { market, outcome } = selection;
-        setMarkets((prev) =>
-            prev.map((m) =>
-                m.id === market.id
-                    ? {
-                        ...m,
-                        bettors: m.bettors + 1,
-                        outcomes: m.outcomes.map((o) =>
-                            o.key === outcome.key ? { ...o, pool: o.pool + stake } : o
-                        ),
-                    }
-                    : m
-            )
-        );
+        router.push(`/market/${market.id}?pick=${outcome.key}`);
     }
 
     const loading = fixtures.isLoading;
@@ -136,13 +115,6 @@ export function MarketsGrid() {
                     until the on-chain market program ships.
                 </p>
             )}
-
-            <BetSheet
-                open={sheetOpen}
-                onOpenChange={setSheetOpen}
-                selection={selection}
-                onPlace={place}
-            />
         </div>
     );
 }
