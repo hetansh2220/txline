@@ -12,6 +12,7 @@ import {
 import type { Txoracle } from "@/types/txoracle";
 import idl from "@/idl/txoracle.json";
 import {
+    backendUrl,
     txlTokenMint,
     pricingMatrixPda,
     tokenTreasuryPda,
@@ -78,9 +79,11 @@ export function useActivate() {
                 .preInstructions([createAtaIx])
                 .rpc();
 
-            // 2. guest JWT
+            // 2. guest JWT — from your Node backend. Expected: POST returns { token }.
             setStatus("authenticating");
-            const { token: jwt } = await fetch("/api/txline/guest/start", { method: "POST" }).then((r) => r.json());
+            const { token: jwt } = await fetch(`${backendUrl}/auth/guest/start`, {
+                method: "POST",
+            }).then((r) => r.json());
             if (!jwt) throw new Error("No JWT");
 
             // 3. sign activation message
@@ -88,9 +91,10 @@ export function useActivate() {
             if (!signMessage) throw new Error("Wallet can't sign messages");
             const walletSignature = toBase64(await signMessage(new TextEncoder().encode(`${sig}::${jwt}`)));
 
-            // 4. activate -> API token, then persist
+            // 4. activate -> API token, then persist. Node endpoint gets this body,
+            //    proxies to TxLINE, and returns { token }.
             setStatus("activating");
-            const activation = await fetch("/api/txline/activate", {
+            const activation = await fetch(`${backendUrl}/api/token/activate`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ txSig: sig, walletSignature, leagues: [], jwt }),
