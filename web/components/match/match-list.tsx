@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useMyEntries } from "@/lib/room/entry";
 import { useTxlineCreds } from "@/lib/txline/creds";
 import { getFixtures, getFinalScores, epochDay } from "@/lib/txline/data";
 import { MatchCard, type Fixture } from "./match-card";
@@ -24,6 +26,9 @@ const toList = (raw: unknown): Fixture[] =>
 
 export function MatchList() {
     const creds = useTxlineCreds();
+    const { publicKey } = useWallet();
+    // One request for the whole grid, so each card knows if it's already joined.
+    const { data: myEntries } = useMyEntries(publicKey?.toBase58());
     const [filter, setFilter] = useState("All");
 
     const {
@@ -131,7 +136,12 @@ export function MatchList() {
             ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {visible.map((f) => (
-                        <MatchCard key={f.FixtureId} f={f} score={scoreFor(f)} />
+                        <MatchCard
+                            key={f.FixtureId}
+                            f={f}
+                            score={scoreFor(f)}
+                            pick={myEntries?.[f.FixtureId]?.pick}
+                        />
                     ))}
                 </div>
             )}

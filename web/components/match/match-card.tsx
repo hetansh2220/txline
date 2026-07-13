@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { teamFlag, teamCode } from "@/lib/txline/flags";
+import { cn } from "@/lib/utils";
 
 export interface Fixture {
     FixtureId: number;
@@ -23,7 +25,16 @@ function timeLeft(ms?: number): string {
     return `${m}m`;
 }
 
-export function MatchCard({ f, score }: { f: Fixture; score?: { home: number; away: number } | null }) {
+export function MatchCard({
+    f,
+    score,
+    pick,
+}: {
+    f: Fixture;
+    score?: { home: number; away: number } | null;
+    /** This user's contest pick, if they've already joined. */
+    pick?: "home" | "draw" | "away";
+}) {
     const p1IsHome = f.Participant1IsHome ?? true;
     const home = p1IsHome ? f.Participant1 : f.Participant2;
     const away = p1IsHome ? f.Participant2 : f.Participant1;
@@ -34,6 +45,10 @@ export function MatchCard({ f, score }: { f: Fixture; score?: { home: number; aw
 
 
     if (state === "completed" && !score) return null;
+
+    // A completed match has no room to go back to, so "joined" only applies while
+    // the contest is still open or running.
+    const joined = !!pick && state !== "completed";
 
     return (
         <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
@@ -79,14 +94,30 @@ export function MatchCard({ f, score }: { f: Fixture; score?: { home: number; aw
 
             <div className="px-4 pb-4">
                 <Link
-                    href={
-                        state === "completed"
-                            ? `/match/${f.FixtureId}?h=${encodeURIComponent(home ?? "")}&a=${encodeURIComponent(away ?? "")}`
-                            : `/match/${f.FixtureId}/room`
-                    }
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 text-md font-semibold text-foreground shadow-inner shadow-white/5 backdrop-blur-md transition-colors hover:border-white/25 hover:bg-white/15"
+                    // The room needs the kickoff time to know whether the match is
+                    // upcoming (entries open) or live (entries locked).
+                    href={`${state === "completed" ? "/match" : "/room"}/${f.FixtureId}?h=${encodeURIComponent(
+                        home ?? ""
+                    )}&a=${encodeURIComponent(away ?? "")}${state === "completed" ? "" : `&t=${f.StartTime ?? 0}`}`}
+                    className={cn(
+                        "flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-md font-semibold shadow-inner backdrop-blur-md transition-colors",
+                        // Emerald only means "you're in this room" — a finished match has
+                        // no room to enter, so View result keeps the neutral style.
+                        joined
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 shadow-emerald-500/5 hover:bg-emerald-500/15"
+                            : "border-white/15 bg-white/10 text-foreground shadow-white/5 hover:border-white/25 hover:bg-white/15"
+                    )}
                 >
-                    {state === "completed" ? "View result" : "Join contest"}
+                    {state === "completed" ? (
+                        "View result"
+                    ) : joined ? (
+                        <>
+                            Enter room
+                            <ArrowRight className="size-4" />
+                        </>
+                    ) : (
+                        "Join contest"
+                    )}
                 </Link>
             </div>
         </div>

@@ -1,0 +1,175 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { ArrowDown } from "lucide-react";
+import { avatarUrl } from "@/lib/user";
+import type { ChatMessage, RoomMessage, SystemMessage } from "@/lib/room/types";
+import { cn } from "@/lib/utils";
+
+const time = (ts: number) =>
+    new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+export function ChatStream({ messages, meWallet }: { messages: RoomMessage[]; meWallet?: string }) {
+    const bottom = useRef<HTMLDivElement>(null);
+    const scroller = useRef<HTMLDivElement>(null);
+    const [pinned, setPinned] = useState(true);
+
+    // Only follow the conversation if the user is already at the bottom. Yanking
+    // someone back down mid-scroll is the fastest way to ruin a chat UI.
+    useEffect(() => {
+        if (pinned) bottom.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages, pinned]);
+
+    function onScroll() {
+        const el = scroller.current;
+        if (!el) return;
+        const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+        setPinned(distance < 80);
+    }
+
+    return (
+        <div className="relative min-h-0 flex-1">
+            <div
+                ref={scroller}
+                onScroll={onScroll}
+                className="flex h-full flex-col gap-1.5 overflow-y-auto px-6 py-5"
+            >
+                {messages.length === 0 && (
+                    <p className="m-auto text-sm text-muted-foreground">
+                        No one&apos;s talking yet. Say something.
+                    </p>
+                )}
+
+                {messages.map((m, i) => {
+                    if (m.kind === "system") return <SystemCard key={m.id} message={m} />;
+
+                    // Consecutive messages from one person collapse into a run: the
+                    // avatar and name appear once, which is what kills the dead space.
+                    const prev = messages[i - 1];
+                    const grouped =
+                        prev?.kind === "chat" &&
+                        prev.user.wallet === m.user.wallet &&
+                        m.ts - prev.ts < 5 * 60_000;
+
+                    return (
+                        <Bubble
+                            key={m.id}
+                            message={m}
+                            mine={m.user.wallet === meWallet}
+                            grouped={grouped}
+                        />
+                    );
+                })}
+                <div ref={bottom} />
+            </div>
+
+            {!pinned && (
+                <button
+                    onClick={() => setPinned(true)}
+                    className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg transition-transform hover:scale-105"
+                >
+                    <ArrowDown className="size-3.5" /> New messages
+                </button>
+            )}
+        </div>
+    );
+}
+
+function Bubble({
+    message,
+    mine,
+    grouped,
+}: {
+    message: ChatMessage;
+    mine: boolean;
+    grouped: boolean;
+}) {
+    return (
+        <div
+            className={cn(
+                "flex items-end gap-2.5",
+                mine && "flex-row-reverse",
+                !grouped && "mt-3" // breathing room between speakers, tight within a run
+            )}
+        >
+            {grouped ? (
+                <span className="size-8 shrink-0" /> // keeps the run aligned under the avatar
+            ) : (
+                <img
+                    src={avatarUrl(message.user.wallet)}
+                    alt=""
+                    className="size-8 shrink-0 rounded-full bg-muted ring-1 ring-border"
+                />
+            )}
+
+            <div className={cn("flex max-w-[80%] flex-col gap-1", mine && "items-end")}>
+                {!grouped && (
+                    <span className="flex items-center gap-2 px-1 text-xs">
+                        <span className="font-medium">{mine ? "You" : message.user.username}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground">{time(message.ts)}</span>
+                    </span>
+                )}
+                <p
+                    className={cn(
+                        "rounded-2xl px-3.5 py-2 text-sm wrap-break-word transition-opacity",
+                        mine
+                            ? "rounded-br-sm bg-primary text-primary-foreground"
+                            : "rounded-bl-sm bg-muted text-foreground",
+                        message.pending && "opacity-60",
+                        message.failed && "bg-destructive/20 text-destructive"
+                    )}
+                >
+                    {message.body}
+                </p>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * The match interrupting the conversation. Deliberately full-bleed and loud —
+ * a goal should physically break the flow of chat, the way it breaks the room.
+ */
+function SystemCard({ message }: { message: SystemMessage }) {
+    if (message.event === "goal") {
+        return (
+            <div className="animate-in fade-in-0 zoom-in-95 overflow-hidden rounded-2xl bg-emerald-600 text-center text-white duration-300">
+                <div className="flex flex-col items-center gap-0.5 py-3">
+                    <span className="text-xl leading-none">⚽</span>
+                    <span className="font-heading text-base font-extrabold tracking-widest">GOAL</span>
+                    <span className="text-sm font-semibold">
+                        {message.player ?? message.team}
+                        {message.minute !== undefined && (
+                            <span className="ml-1.5 font-mono text-xs opacity-80">{message.minute}&apos;</span>
+                        )}
+                    </span>
+                </div>
+                {message.score && (
+                    <div className="bg-black/20 py-1.5 font-mono text-xs font-bold tabular-nums">
+                        {message.score[0]} &nbsp;-&nbsp; {message.score[1]}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    const meta: Record<string, { icon: string; label: string }> = {
+        yellow: { icon: "🟨", label: "Yellow card" },
+        red: { icon: "🟥", label: "Red card" },
+        sub: { icon: "🔁", label: "Substitution" },
+        kickoff: { icon: "⏱", label: "Kick off" },
+        fulltime: { icon: "⏱", label: "Full time" },
+    };
+    const { icon, label } = meta[message.event] ?? { icon: "•", label: message.event };
+
+    return (
+        <div className="flex items-center justify-center gap-2.5 rounded-xl border border-border bg-muted/40 px-4 py-2.5 text-xs">
+            <span>{icon}</span>
+            <span className="font-mono font-bold tracking-widest text-muted-foreground uppercase">{label}</span>
+            {message.player && <span className="font-medium">{message.player}</span>}
+            {message.minute !== undefined && (
+                <span className="font-mono tabular-nums text-muted-foreground">{message.minute}&apos;</span>
+            )}
+        </div>
+    );
+}
