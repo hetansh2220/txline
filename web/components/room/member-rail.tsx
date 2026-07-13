@@ -30,11 +30,16 @@ export function MemberRail({
         // left a tall empty box under a short list, which is what looked broken.
         <aside className="flex max-h-full w-full flex-col self-start overflow-hidden rounded-2xl border border-border bg-card">
             <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3.5">
-                <span className="font-heading text-xs font-bold tracking-widest uppercase">In the room</span>
-                <span className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                    <span className="size-1.5 rounded-full bg-emerald-500" />
-                    {onlineCount}
+                <span className="font-heading text-xs font-bold tracking-widest uppercase">
+                    In the room
+
                 </span>
+                {onlineCount > 0 && (
+                    <span className="flex items-center gap-1.5 font-mono text-xs text-emerald-500">
+                        <span className="size-1.5 rounded-full bg-emerald-500" />
+                        {onlineCount}
+                    </span>
+                )}
             </header>
 
             <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto p-2">

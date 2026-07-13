@@ -7,6 +7,7 @@ import tokenRoutes from "./src/routes/token.routes.js";
 import dataRoutes from "./src/routes/data.routes.js";
 import userRoutes from "./src/routes/user.routes.js";
 import roomRoutes from "./src/routes/room.routes.js";
+import contestRoutes from "./src/routes/contest.routes.js";
 import { DbConnection } from "./src/config/db.js";
 import { attachSocket } from "./src/socket.js";
 
@@ -21,6 +22,7 @@ app.use(tokenRoutes);
 app.use(dataRoutes);
 app.use(userRoutes);
 app.use(roomRoutes);
+app.use(contestRoutes);
 
 // Socket.IO needs a real http.Server to upgrade the connection. app.listen()
 // makes one internally but never hands it back, so we create it ourselves.

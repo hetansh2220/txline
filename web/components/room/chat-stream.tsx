@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, Reply } from "lucide-react";
 import { avatarUrl } from "@/lib/user";
 import type { ChatMessage, RoomMessage, SystemMessage } from "@/lib/room/types";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,43 @@ import { cn } from "@/lib/utils";
 const time = (ts: number) =>
     new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-export function ChatStream({ messages, meWallet }: { messages: RoomMessage[]; meWallet?: string }) {
+/**
+ * A GIF travels as a plain message whose body is its URL (no schema change), so
+ * anything that looks like a URL would otherwise render as an image. Only Tenor
+ * is trusted — otherwise a user could embed an arbitrary image or tracking pixel
+ * in the room by typing a link.
+ */
+function gifUrl(body: string): string | null {
+    try {
+        const url = new URL(body.trim());
+        const ok = url.protocol === "https:" && /(^|\.)tenor\.com$/.test(url.hostname);
+        return ok ? url.href : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * A message that's nothing but emoji (up to 3) renders large and bubble-less —
+ * a single 😂 marooned in a full-size bubble looks like a mistake.
+ */
+const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|️|‍)+$/u;
+
+function isEmojiOnly(body: string): boolean {
+    const text = body.trim();
+    if (!text || !EMOJI_ONLY.test(text)) return false;
+    return [...new Intl.Segmenter().segment(text)].length <= 3;
+}
+
+export function ChatStream({
+    messages,
+    meWallet,
+    onReply,
+}: {
+    messages: RoomMessage[];
+    meWallet?: string;
+    onReply?: (m: ChatMessage) => void;
+}) {
     const bottom = useRef<HTMLDivElement>(null);
     const scroller = useRef<HTMLDivElement>(null);
     const [pinned, setPinned] = useState(true);
@@ -57,6 +93,7 @@ export function ChatStream({ messages, meWallet }: { messages: RoomMessage[]; me
                             message={m}
                             mine={m.user.wallet === meWallet}
                             grouped={grouped}
+                            onReply={onReply}
                         />
                     );
                 })}
@@ -79,15 +116,21 @@ function Bubble({
     message,
     mine,
     grouped,
+    onReply,
 }: {
     message: ChatMessage;
     mine: boolean;
     grouped: boolean;
+    onReply?: (m: ChatMessage) => void;
 }) {
+    const gif = gifUrl(message.body);
+    const emojiOnly = !gif && isEmojiOnly(message.body);
+
     return (
         <div
+            id={`msg-${message.id}`}
             className={cn(
-                "flex items-end gap-2.5",
+                "group flex items-end gap-2.5 scroll-mt-4 transition-colors",
                 mine && "flex-row-reverse",
                 !grouped && "mt-3" // breathing room between speakers, tight within a run
             )}
@@ -102,26 +145,91 @@ function Bubble({
                 />
             )}
 
-            <div className={cn("flex max-w-[80%] flex-col gap-1", mine && "items-end")}>
+            {/* items-start/end keeps the bubble at its content width — without it the
+                bubble stretches to match the name+time header above it, so a
+                one-emoji message rendered as wide as the username. */}
+            <div
+                className={cn(
+                    "flex max-w-[80%] flex-col gap-1",
+                    mine ? "items-end" : "items-start"
+                )}
+            >
                 {!grouped && (
                     <span className="flex items-center gap-2 px-1 text-xs">
                         <span className="font-medium">{mine ? "You" : message.user.username}</span>
                         <span className="font-mono text-[10px] text-muted-foreground">{time(message.ts)}</span>
                     </span>
                 )}
-                <p
-                    className={cn(
-                        "rounded-2xl px-3.5 py-2 text-sm wrap-break-word transition-opacity",
-                        mine
-                            ? "rounded-br-sm bg-primary text-primary-foreground"
-                            : "rounded-bl-sm bg-muted text-foreground",
-                        message.pending && "opacity-60",
-                        message.failed && "bg-destructive/20 text-destructive"
-                    )}
-                >
-                    {message.body}
-                </p>
+
+                {/* The quote sits ABOVE the bubble and jumps to the original on click —
+                    the whole point of a reply is being able to find what it answers. */}
+                {message.replyTo && (
+                    <button
+                        onClick={() =>
+                            document
+                                .getElementById(`msg-${message.replyTo!.id}`)
+                                ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                        }
+                        className={cn(
+                            "flex max-w-full flex-col items-start gap-0.5 rounded-lg border-l-2 border-emerald-500/60 bg-muted/40 px-2.5 py-1.5 text-left transition-colors hover:bg-muted",
+                            mine && "items-end"
+                        )}
+                    >
+                        <span className="text-[10px] font-semibold text-emerald-400">
+                            {message.replyTo.username}
+                        </span>
+                        <span className="line-clamp-1 text-[11px] text-muted-foreground">
+                            {gifUrl(message.replyTo.body) ? "GIF" : message.replyTo.body}
+                        </span>
+                    </button>
+                )}
+                {gif ? (
+                    <img
+                        src={gif}
+                        alt="GIF"
+                        className={cn(
+                            "max-w-full rounded-2xl ring-1 ring-border transition-opacity",
+                            mine ? "rounded-br-sm" : "rounded-bl-sm",
+                            message.pending && "opacity-60"
+                        )}
+                    />
+                ) : emojiOnly ? (
+                    <p
+                        className={cn(
+                            "px-1 text-4xl leading-tight transition-opacity",
+                            message.pending && "opacity-60"
+                        )}
+                    >
+                        {message.body}
+                    </p>
+                ) : (
+                    <p
+                        className={cn(
+                            "rounded-2xl px-3.5 py-2 text-sm wrap-break-word transition-opacity",
+                            mine
+                                ? "rounded-br-sm bg-primary text-primary-foreground"
+                                : "rounded-bl-sm bg-muted text-foreground",
+                            message.pending && "opacity-60",
+                            message.failed && "bg-destructive/20 text-destructive"
+                        )}
+                    >
+                        {message.body}
+                    </p>
+                )}
             </div>
+
+            {/* Appears on hover only — a permanent button on every message would be
+                visual noise on a busy stream. Hidden until the message is real. */}
+            {onReply && !message.pending && (
+                <button
+                    onClick={() => onReply(message)}
+                    title="Reply"
+                    aria-label="Reply"
+                    className="mb-1 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
+                >
+                    <Reply className="size-3.5" />
+                </button>
+            )}
         </div>
     );
 }

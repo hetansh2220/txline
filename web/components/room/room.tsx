@@ -10,6 +10,7 @@ import { getHistorical } from "@/lib/txline/data";
 import { parseHistorical, type Snapshot } from "@/lib/txline/timeline";
 import { useProfile } from "@/lib/user";
 import { useRoom } from "@/lib/room/use-room";
+import type { ChatMessage } from "@/lib/room/types";
 import { useEntry, useSubmitPick } from "@/lib/room/entry";
 import { ChatStream } from "./chat-stream";
 import { Composer } from "./composer";
@@ -60,6 +61,7 @@ export function Room({
 
     // Mobile can't fit three columns, so the rails become tabs.
     const [pane, setPane] = useState<"chat" | "match" | "people">("chat");
+    const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
 
     return (
         // Pinned to the viewport (minus the h-16 navbar) so the rails stay put and
@@ -76,9 +78,13 @@ export function Room({
                 <h1 className="truncate font-heading text-sm font-bold tracking-widest uppercase">
                     {home} <span className="text-muted-foreground">v</span> {away}
                 </h1>
-                <span className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                    <Users className="size-3.5" />
-                    {room.onlineCount}
+                {/* Everyone in the room, not just who's connected — the green dot in
+                    the members rail is what tracks presence. */}
+                <span className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                        <Users className="size-3.5" />
+                        {room.members.length}
+                    </span>
                 </span>
             </div>
 
@@ -112,6 +118,8 @@ export function Room({
                         kickoff={kickoff}
                         pick={pick}
                         onPick={(p) => submitPick.mutate(p)}
+                        pending={submitPick.isPending}
+                        error={submitPick.error?.message ?? null}
                     />
                 </div>
 
@@ -136,8 +144,14 @@ export function Room({
                             {room.error ?? "Connecting…"}
                         </div>
                     )}
-                    <ChatStream messages={room.messages} meWallet={wallet} />
-                    <Composer onSend={room.send} connected={room.connected} canChat={!!me} />
+                    <ChatStream messages={room.messages} meWallet={wallet} onReply={setReplyTo} />
+                    <Composer
+                        onSend={room.send}
+                        connected={room.connected}
+                        canChat={!!me}
+                        replyTo={replyTo}
+                        onCancelReply={() => setReplyTo(null)}
+                    />
                 </section>
 
                 <div className={cn("min-h-0", pane === "people" ? "flex" : "hidden", "lg:flex")}>

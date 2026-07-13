@@ -1,4 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../config/db.js";
 import { users, messages, entries } from "../db/schema.js";
 import { buildMembers, emitMembers } from "../socket.js";
@@ -43,6 +44,11 @@ export async function getMessages(req, res) {
     const roomId = `match:${req.params.fixtureId}`;
     const limit = Math.min(Number(req.query.limit) || 50, 100);
 
+    // Self-join: each message may quote another, so the parent's body and author
+    // ride along rather than making the client resolve them.
+    const parent = alias(messages, "parent");
+    const parentUser = alias(users, "parent_user");
+
     try {
         const rows = await db
             .select({
@@ -51,9 +57,14 @@ export async function getMessages(req, res) {
                 createdAt: messages.createdAt,
                 wallet: users.wallet,
                 username: users.username,
+                replyId: parent.id,
+                replyBody: parent.body,
+                replyUsername: parentUser.username,
             })
             .from(messages)
             .innerJoin(users, eq(messages.userId, users.id))
+            .leftJoin(parent, eq(messages.replyToId, parent.id))
+            .leftJoin(parentUser, eq(parent.userId, parentUser.id))
             .where(eq(messages.roomId, roomId))
             .orderBy(desc(messages.createdAt))
             .limit(limit);
@@ -65,6 +76,9 @@ export async function getMessages(req, res) {
                 body: r.body,
                 ts: new Date(r.createdAt).getTime(),
                 user: { wallet: r.wallet, username: r.username },
+                replyTo: r.replyId
+                    ? { id: r.replyId, body: r.replyBody, username: r.replyUsername }
+                    : null,
             }))
         );
     } catch (e) {

@@ -10,13 +10,7 @@ const RATE_WINDOW = 5000; // ...per 5s, per socket
 export const roomIdFor = (fixtureId) => `match:${fixtureId}`;
 const fixtureOf = (roomId) => Number(roomId.split(":")[1]);
 
-/**
- * Who is CONNECTED right now: roomId -> Set(userId). This is presence only.
- *
- * Membership of a room is a different thing entirely, and lives in the `entries`
- * table: joining a contest is durable, so navigating away must not remove you.
- * Presence merely decides whether your dot is green.
- */
+
 const online = new Map();
 
 function connect(roomId, userId) {
@@ -40,12 +34,15 @@ export async function buildMembers(fixtureId) {
     const roomId = roomIdFor(fixtureId);
     const connected = online.get(roomId) ?? new Set();
 
+    // Points from THIS contest (entries.points), not the user's lifetime total —
+    // a room's leaderboard is about this match. Lifetime points live on the
+    // global leaderboard and the profile.
     const entrants = await db
         .select({
             id: users.id,
             wallet: users.wallet,
             username: users.username,
-            points: users.points,
+            points: entries.points,
             pick: entries.pick,
         })
         .from(entries)
@@ -70,7 +67,7 @@ export async function buildMembers(fixtureId) {
             members.push({
                 wallet: u.wallet,
                 username: u.username,
-                points: u.points ?? 0,
+                points: 0, // no entry in this contest, so no points from it
                 pick: undefined,
                 online: true,
             });
@@ -151,7 +148,7 @@ export function attachSocket(server) {
             await emitMembers(fixtureOf(roomId));
         });
 
-        socket.on("message:send", async ({ body, clientId } = {}) => {
+        socket.on("message:send", async ({ body, clientId, replyTo } = {}) => {
             const roomId = socket.data.roomId;
             if (!roomId) return;
 
@@ -170,8 +167,24 @@ export function attachSocket(server) {
             try {
                 const [saved] = await db
                     .insert(messages)
-                    .values({ roomId, userId: user.id, body: text })
+                    .values({ roomId, userId: user.id, body: text, replyToId: replyTo ?? null })
                     .returning();
+
+                // Ship the quoted message inline so clients can render it without a
+                // second round-trip or a lookup against messages they may not hold.
+                let quoted = null;
+                if (saved.replyToId) {
+                    const [parent] = await db
+                        .select({
+                            id: messages.id,
+                            body: messages.body,
+                            username: users.username,
+                        })
+                        .from(messages)
+                        .innerJoin(users, eq(messages.userId, users.id))
+                        .where(eq(messages.id, saved.replyToId));
+                    quoted = parent ?? null;
+                }
 
                 io.to(roomId).emit("message:new", {
                     id: saved.id,
@@ -180,6 +193,7 @@ export function attachSocket(server) {
                     body: saved.body,
                     ts: new Date(saved.createdAt).getTime(),
                     user: { wallet: user.wallet, username: user.username },
+                    replyTo: quoted,
                 });
             } catch (e) {
                 socket.emit("message:rejected", { clientId, reason: e.message });

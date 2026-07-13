@@ -19,7 +19,10 @@ export function useMyEntries(wallet?: string) {
     return useQuery({
         queryKey: ["my-entries", wallet],
         enabled: !!wallet,
-        staleTime: 30_000,
+        // Coming back from a room, the grid MUST reflect the pick just made — so
+        // always refetch on mount rather than trusting a cached copy.
+        staleTime: 0,
+        refetchOnMount: "always",
         queryFn: async (): Promise<Record<number, Entry>> => {
             const res = await fetch(`${API}/api/entries?wallet=${wallet}`);
             if (!res.ok) throw new Error(`entries failed (${res.status})`);
@@ -44,6 +47,7 @@ export function useEntry(fixtureId: number, wallet?: string) {
 
 export function useSubmitPick(fixtureId: number, wallet?: string, kickoff?: number) {
     const qc = useQueryClient();
+    const key = ["entry", fixtureId, wallet];
 
     return useMutation({
         mutationFn: async (pick: Pick): Promise<Entry> => {
@@ -57,10 +61,25 @@ export function useSubmitPick(fixtureId: number, wallet?: string, kickoff?: numb
             if (!res.ok) throw new Error(data?.error ?? `pick failed (${res.status})`);
             return data;
         },
+
+        // Fill the button in immediately. Waiting for the round-trip made the
+        // selection lag behind the click, which felt broken.
+        onMutate: async (pick) => {
+            await qc.cancelQueries({ queryKey: key });
+            const previous = qc.getQueryData<Entry | null>(key);
+            qc.setQueryData<Entry>(key, { pick, points: previous?.points ?? 0, settled: false });
+            return { previous };
+        },
+
+        // The server said no (e.g. entries closed) — put the old pick back.
+        onError: (_err, _pick, context) => {
+            qc.setQueryData(key, context?.previous ?? null);
+        },
+
         onSuccess: (entry) => {
-            qc.setQueryData(["entry", fixtureId, wallet], entry);
-            // The match grid shows "Joined", and the room's people list shows the
-            // pick — both are now stale.
+            qc.setQueryData(key, entry);
+            // The match grid shows "Enter room", and the room's people list shows
+            // the pick — both are now stale.
             qc.invalidateQueries({ queryKey: ["my-entries", wallet] });
             qc.invalidateQueries({ queryKey: ["room-members", fixtureId] });
         },

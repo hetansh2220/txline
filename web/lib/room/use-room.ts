@@ -19,6 +19,7 @@ interface Wire {
     body: string;
     ts: number;
     user: { wallet: string; username: string };
+    replyTo?: { id: string; username: string; body: string } | null;
 }
 
 const toMessage = (w: Wire): ChatMessage => ({
@@ -27,6 +28,7 @@ const toMessage = (w: Wire): ChatMessage => ({
     user: w.user,
     body: w.body,
     ts: w.ts,
+    replyTo: w.replyTo ?? null,
 });
 
 async function fetchHistory(fixtureId: number): Promise<ChatMessage[]> {
@@ -126,11 +128,16 @@ export function useRoom(matchId: number, me?: RoomUser): Room {
     }, [matchId, me?.wallet]);
 
     const send = useCallback(
-        (body: string) => {
+        (body: string, replyTo?: string) => {
             if (!me || !socket.current) return;
             const clientId = `tmp-${Date.now()}`;
 
-            // Optimistic: on screen immediately, reconciled when the server echoes it back.
+            // The optimistic copy quotes from what's already on screen, so the reply
+            // renders complete before the server has echoed anything back.
+            const parent = replyTo
+                ? [...history, ...live].find((m) => m.kind === "chat" && m.id === replyTo)
+                : undefined;
+
             const optimistic: ChatMessage = {
                 id: clientId,
                 kind: "chat",
@@ -138,11 +145,15 @@ export function useRoom(matchId: number, me?: RoomUser): Room {
                 body,
                 ts: Date.now(),
                 pending: true,
+                replyTo:
+                    parent && parent.kind === "chat"
+                        ? { id: parent.id, username: parent.user.username, body: parent.body }
+                        : null,
             };
             setLive((prev) => [...prev, optimistic]);
-            socket.current.emit("message:send", { body, clientId });
+            socket.current.emit("message:send", { body, clientId, replyTo });
         },
-        [me]
+        [me, history, live]
     );
 
     // History first, then anything that arrived live — deduped, since a message

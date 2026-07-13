@@ -10,9 +10,11 @@ import { MatchCard, type Fixture } from "./match-card";
 import { cn } from "@/lib/utils";
 
 const LIVE_WINDOW = 2.5 * 60 * 60 * 1000;
+const MY_ROOMS = "My rooms";
 
-function matchesFilter(f: Fixture, filter: string): boolean {
+function matchesFilter(f: Fixture, filter: string, joined: Set<number>): boolean {
     if (filter === "All") return true;
+    if (filter === MY_ROOMS) return joined.has(f.FixtureId);
     const now = Date.now();
     const start = f.StartTime ?? 0;
     if (filter === "Upcoming") return start > now;
@@ -57,10 +59,19 @@ export function MatchList() {
         },
     });
 
+    // Fixtures this wallet has entered — drives both the "My rooms" tab and the
+    // per-card "Enter room" state.
+    const joined = useMemo(
+        () => new Set(Object.keys(myEntries ?? {}).map(Number)),
+        [myEntries]
+    );
+
     const tabs = useMemo(() => {
         const comps = Array.from(new Set(fixtures.map((f) => f.Competition).filter(Boolean))) as string[];
-        return ["All", ...comps, "Upcoming", "Live", "Completed"];
-    }, [fixtures]);
+        // Only offer "My rooms" once there's something in it — an always-empty tab
+        // is worse than no tab.
+        return ["All", ...(joined.size ? [MY_ROOMS] : []), ...comps, "Upcoming", "Live", "Completed"];
+    }, [fixtures, joined]);
 
 
     const completedIds = useMemo(() => {
@@ -108,7 +119,7 @@ export function MatchList() {
         );
     }
 
-    const visible = fixtures.filter((f) => matchesFilter(f, filter));
+    const visible = fixtures.filter((f) => matchesFilter(f, filter, joined));
 
     return (
         <div className="flex flex-col gap-6">
@@ -132,7 +143,11 @@ export function MatchList() {
 
 
             {visible.length === 0 ? (
-                <p className="py-16 text-center text-sm text-muted-foreground">No matches here.</p>
+                <p className="py-16 text-center text-sm text-muted-foreground">
+                    {filter === MY_ROOMS
+                        ? "You haven't joined any contests yet."
+                        : "No matches here."}
+                </p>
             ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {visible.map((f) => (

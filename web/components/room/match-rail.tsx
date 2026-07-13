@@ -3,6 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { teamCode, teamFlag } from "@/lib/txline/flags";
 import type { TimelineEvent } from "@/lib/txline/timeline";
 import { cn } from "@/lib/utils";
@@ -35,6 +44,8 @@ export function MatchRail({
     kickoff,
     pick,
     onPick,
+    pending,
+    error,
 }: {
     matchId: number;
     home?: string;
@@ -45,6 +56,8 @@ export function MatchRail({
     kickoff?: number;
     pick?: Pick;
     onPick: (p: Pick) => void;
+    pending?: boolean;
+    error?: string | null;
 }) {
     const key = events.filter((e) => e.kind === "goal" || e.kind === "red");
 
@@ -72,7 +85,14 @@ export function MatchRail({
 
             {/* Before kickoff the rail's job is to take your entry. */}
             {state === "upcoming" ? (
-                <PickCard home={home} away={away} pick={pick} onPick={onPick} />
+                <PickCard
+                    home={home}
+                    away={away}
+                    pick={pick}
+                    onPick={onPick}
+                    pending={pending}
+                    error={error}
+                />
             ) : (
                 <YourPick pick={pick} home={home} away={away} />
             )}
@@ -151,23 +171,36 @@ function Status({ state, kickoff }: { state: MatchState; kickoff?: number }) {
     );
 }
 
-/** The contest entry. Locks at kickoff — otherwise you could back a team already winning. */
+/**
+ * The contest entry: three pills, the chosen one filled solid. Locks at kickoff,
+ * otherwise you could back a team that is already winning.
+ */
 function PickCard({
     home,
     away,
     pick,
     onPick,
+    pending,
+    error,
 }: {
     home?: string;
     away?: string;
     pick?: Pick;
     onPick: (p: Pick) => void;
+    pending?: boolean;
+    error?: string | null;
 }) {
-    const options: { key: Pick; label: string }[] = [
-        { key: "home", label: home ?? "Home" },
-        { key: "draw", label: "Draw" },
-        { key: "away", label: away ?? "Away" },
+    // The pick is a commitment that locks at kickoff, so it gets a confirm step
+    // rather than firing on a stray click.
+    const [confirming, setConfirming] = useState<Pick | null>(null);
+
+    const options: { key: Pick; team?: string }[] = [
+        { key: "home", team: home },
+        { key: "draw" },
+        { key: "away", team: away },
     ];
+    const nameOf = (p: Pick) =>
+        p === "draw" ? "a draw" : p === "home" ? (home ?? "Home") : (away ?? "Away");
 
     return (
         <section className="shrink-0 rounded-2xl border border-border bg-card p-4">
@@ -175,43 +208,107 @@ function PickCard({
                 <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
                     Your pick
                 </span>
-                <span className="font-mono text-[10px] font-bold text-emerald-500">+15 PTS</span>
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
+                    +15 PTS
+                </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5">
-                {options.map((o) => (
-                    <button
-                        key={o.key}
-                        onClick={() => onPick(o.key)}
-                        className={cn(
-                            "flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 transition-colors",
-                            pick === o.key
-                                ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
-                                : "border-border text-muted-foreground hover:border-white/25 hover:text-foreground"
-                        )}
-                    >
-                        <span className="truncate text-[11px] font-semibold">{o.label}</span>
-                    </button>
-                ))}
+            <div className="grid grid-cols-3 gap-2">
+                {options.map((o) => {
+                    const selected = pick === o.key;
+                    const label = o.key === "draw" ? "Draw" : (o.team ?? "—");
+
+                    return (
+                        <button
+                            key={o.key}
+                            onClick={() => setConfirming(o.key)}
+                            disabled={pending}
+                            title={label}
+                            className={cn(
+                                "h-12 truncate rounded-2xl px-2 text-sm font-bold transition-colors disabled:opacity-60",
+                                selected
+                                    ? "bg-emerald-500 text-white hover:bg-emerald-500/90"
+                                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            )}
+                        >
+                            {label}
+                        </button>
+                    );
+                })}
             </div>
 
-            <p className="mt-2.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+            {/* A join that fails must SAY so — it used to roll back silently, which
+                looked exactly like a join that worked. */}
+            {error && (
+                <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive">
+                    {error}
+                </p>
+            )}
+
+            <p className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground">
                 <Lock className="size-3" /> Locks at kickoff
             </p>
+
+            <Dialog open={!!confirming} onOpenChange={(o) => !o && setConfirming(null)}>
+                <DialogContent className="gap-0 p-0 sm:max-w-md">
+                    <DialogHeader className="gap-2 px-6 pt-6 pb-5">
+                        <DialogTitle className="font-heading text-xl">
+                            {pick ? "Change your pick?" : "Join this contest?"}
+                        </DialogTitle>
+                        <DialogDescription className="text-sm">
+                            You&apos;re backing{" "}
+                            <span className="font-semibold text-foreground">
+                                {confirming ? nameOf(confirming) : ""}
+                            </span>
+                            . You can change it until kickoff — after that it&apos;s locked.
+                            A correct call is worth 15 points.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {/* Same treatment as the join dialog: no muted strip, no top border,
+                        two equal-width buttons spanning the footer. */}
+                    <DialogFooter className="m-0 grid grid-cols-2 gap-2.5 border-t-0 bg-transparent px-6 pb-6 sm:grid-cols-2 sm:gap-2.5">
+                        <Button
+                            variant="outline"
+                            size="lg"
+                            className="h-12 w-full"
+                            onClick={() => setConfirming(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            size="lg"
+                            disabled={pending}
+                            className="h-12 w-full"
+                            onClick={() => {
+                                if (confirming) onPick(confirming);
+                                setConfirming(null);
+                            }}
+                        >
+                            {pending ? "Saving…" : pick ? "Change pick" : "Join contest"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </section>
     );
 }
 
+/** After kickoff the pick is frozen, so it collapses to a single locked row. */
 function YourPick({ pick, home, away }: { pick?: Pick; home?: string; away?: string }) {
     if (!pick) return null;
-    const label = pick === "draw" ? "Draw" : pick === "home" ? (home ?? "Home") : (away ?? "Away");
+
+    const team = pick === "home" ? home : pick === "away" ? away : undefined;
+    const label = pick === "draw" ? "Draw" : (team ?? "—");
 
     return (
-        <section className="flex shrink-0 items-center justify-between rounded-2xl border border-border bg-card px-4 py-3">
-            <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Your pick</span>
-            <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-400">
-                <Lock className="size-3" /> {label}
+        <section className="shrink-0 rounded-2xl border border-border bg-card p-4">
+            <span className="mb-3 flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+                <Lock className="size-3" /> Your pick
             </span>
+            <div className="grid h-12 place-items-center truncate rounded-2xl bg-emerald-500 px-3 text-sm font-bold text-white">
+                {label}
+            </div>
         </section>
     );
 }

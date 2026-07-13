@@ -1,7 +1,12 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { teamFlag, teamCode } from "@/lib/txline/flags";
-import { cn } from "@/lib/utils";
+import { JoinDialog } from "./join-dialog";
 
 export interface Fixture {
     FixtureId: number;
@@ -35,6 +40,10 @@ export function MatchCard({
     /** This user's contest pick, if they've already joined. */
     pick?: "home" | "draw" | "away";
 }) {
+    const { connected } = useWallet();
+    const { setVisible } = useWalletModal();
+    const [joining, setJoining] = useState(false);
+
     const p1IsHome = f.Participant1IsHome ?? true;
     const home = p1IsHome ? f.Participant1 : f.Participant2;
     const away = p1IsHome ? f.Participant2 : f.Participant1;
@@ -49,6 +58,15 @@ export function MatchCard({
     // A completed match has no room to go back to, so "joined" only applies while
     // the contest is still open or running.
     const joined = !!pick && state !== "completed";
+    const roomHref = `/room/${f.FixtureId}?h=${encodeURIComponent(home ?? "")}&a=${encodeURIComponent(
+        away ?? ""
+    )}&t=${f.StartTime ?? 0}`;
+    const matchHref = `/match/${f.FixtureId}?h=${encodeURIComponent(home ?? "")}&a=${encodeURIComponent(
+        away ?? ""
+    )}`;
+
+    const BUTTON =
+        "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 text-md font-semibold text-foreground shadow-inner shadow-white/5 backdrop-blur-md transition-colors hover:border-white/25 hover:bg-white/15";
 
     return (
         <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
@@ -93,33 +111,35 @@ export function MatchCard({
 
 
             <div className="px-4 pb-4">
-                <Link
-                    // The room needs the kickoff time to know whether the match is
-                    // upcoming (entries open) or live (entries locked).
-                    href={`${state === "completed" ? "/match" : "/room"}/${f.FixtureId}?h=${encodeURIComponent(
-                        home ?? ""
-                    )}&a=${encodeURIComponent(away ?? "")}${state === "completed" ? "" : `&t=${f.StartTime ?? 0}`}`}
-                    className={cn(
-                        "flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-md font-semibold shadow-inner backdrop-blur-md transition-colors",
-                        // Emerald only means "you're in this room" — a finished match has
-                        // no room to enter, so View result keeps the neutral style.
-                        joined
-                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 shadow-emerald-500/5 hover:bg-emerald-500/15"
-                            : "border-white/15 bg-white/10 text-foreground shadow-white/5 hover:border-white/25 hover:bg-white/15"
-                    )}
-                >
-                    {state === "completed" ? (
-                        "View result"
-                    ) : joined ? (
-                        <>
-                            Enter room
-                            <ArrowRight className="size-4" />
-                        </>
-                    ) : (
-                        "Join contest"
-                    )}
-                </Link>
+                {state === "completed" ? (
+                    <Link href={matchHref} className={BUTTON}>
+                        View result
+                    </Link>
+                ) : joined ? (
+                    <Link href={roomHref} className={BUTTON}>
+                        Enter room
+                        <ArrowRight className="size-4" />
+                    </Link>
+                ) : (
+                    // Joining IS picking a side, so the button opens the pick dialog
+                    // rather than dumping you in the room to decide later.
+                    <button
+                        className={BUTTON}
+                        onClick={() => (connected ? setJoining(true) : setVisible(true))}
+                    >
+                        Join contest
+                    </button>
+                )}
             </div>
+
+            <JoinDialog
+                fixtureId={f.FixtureId}
+                home={home}
+                away={away}
+                kickoff={f.StartTime}
+                open={joining}
+                onOpenChange={setJoining}
+            />
         </div>
     );
 }

@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useContest } from "@/lib/room/contest";
+import { ContestLeaderboard } from "./contest-result";
 import { ArrowLeft, ArrowDown, ArrowUp, Timer } from "lucide-react";
 import { useTxlineCreds } from "@/lib/txline/creds";
 import { getHistorical } from "@/lib/txline/data";
@@ -17,12 +20,19 @@ import {
 } from "@/lib/txline/timeline";
 import { cn } from "@/lib/utils";
 
-const TABS = ["timeline", "stats"] as const;
+const TABS = ["timeline", "stats", "leaderboard"] as const;
 type Tab = (typeof TABS)[number];
 
 export function MatchRecap({ matchId, home, away }: { matchId: number; home?: string; away?: string }) {
     const creds = useTxlineCreds();
-    const [tab, setTab] = useState<Tab>("timeline");
+    const { publicKey } = useWallet();
+    const wallet = publicKey?.toBase58();
+
+    // Opening a finished match settles the contest (idempotent, server-side) —
+    // that's what fills in the leaderboard's points.
+    const { data: contest } = useContest(matchId);
+
+    const [active, setActive] = useState<Tab>("timeline");
 
     const { data, isLoading } = useQuery({
         queryKey: ["historical", matchId],
@@ -63,14 +73,14 @@ export function MatchRecap({ matchId, home, away }: { matchId: number; home?: st
                 </div>
             </section>
 
-            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-card p-1.5">
+            <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border bg-card p-1.5">
                 {TABS.map((t) => (
                     <button
                         key={t}
-                        onClick={() => setTab(t)}
+                        onClick={() => setActive(t)}
                         className={cn(
                             "rounded-xl py-3 font-mono text-xs font-bold tracking-widest uppercase transition-colors",
-                            tab === t
+                            active === t
                                 ? "bg-primary text-primary-foreground"
                                 : "text-muted-foreground hover:text-foreground"
                         )}
@@ -86,7 +96,13 @@ export function MatchRecap({ matchId, home, away }: { matchId: number; home?: st
                         <div key={i} className="h-28 animate-pulse rounded-2xl bg-card" />
                     ))}
                 </div>
-            ) : tab === "timeline" ? (
+            ) : active === "leaderboard" ? (
+                contest ? (
+                    <ContestLeaderboard contest={contest} home={home} away={away} meWallet={wallet} />
+                ) : (
+                    <Empty>No contest for this match.</Empty>
+                )
+            ) : active === "timeline" ? (
                 parsed.timeline.length ? (
                     <section className="flex flex-col gap-3">
                         {parsed.timeline.map((e) => (

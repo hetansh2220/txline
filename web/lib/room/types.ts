@@ -14,6 +14,13 @@ export interface Member extends RoomUser {
     pick?: "home" | "draw" | "away";
 }
 
+/** The message being replied to, quoted inline on the reply. */
+export interface QuotedMessage {
+    id: string;
+    username: string;
+    body: string;
+}
+
 /** A person talking. */
 export interface ChatMessage {
     id: string;
@@ -21,6 +28,8 @@ export interface ChatMessage {
     user: RoomUser;
     body: string;
     ts: number;
+    /** Set when this message is a reply. */
+    replyTo?: QuotedMessage | null;
     /** Sent but not yet acknowledged by the server. */
     pending?: boolean;
     failed?: boolean;
@@ -49,5 +58,6 @@ export interface Room {
     connected: boolean;
     /** Why the socket isn't connected, when it isn't. */
     error: string | null;
-    send: (body: string) => void;
+    /** `replyTo` is the id of the message being answered. */
+    send: (body: string, replyTo?: string) => void;
 }
