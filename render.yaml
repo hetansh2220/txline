@@ -1,0 +1,32 @@
+# Render blueprint for the Instinct backend.
+#
+# A Web Service (not a serverless function) — the app needs a process that stays
+# alive: Socket.IO holds WebSocket connections, and the live match feed holds an
+# SSE stream open to TxLINE for the length of a match.
+services:
+  - type: web
+    name: instinct-server
+    runtime: node
+    plan: starter # NOT free: free instances sleep after 15 min idle, which drops
+      # every socket in the room and kills the live match feed.
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/leaderboard
+
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+
+      # Set these in the Render dashboard — never commit them.
+      - key: DATABASE_URL
+        sync: false # Neon connection string
+      - key: TXLINE_API_TOKEN
+        sync: false # long-lived activated token; without it the server can't
+        # read TxLINE on its own and visitors see nothing
+      - key: TXLINE_ORIGIN
+        value: https://txline-dev.txodds.com
+      - key: FRONTEND_ORIGIN
+        sync: false # https://<your-app>.vercel.app — this is the CORS *and*
+        # Socket.IO origin; get it wrong and the socket
+        # silently refuses to connect

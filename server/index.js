@@ -24,12 +24,13 @@ app.use(userRoutes);
 app.use(roomRoutes);
 app.use(contestRoutes);
 
-// Socket.IO needs a real http.Server to upgrade the connection. app.listen()
-// makes one internally but never hands it back, so we create it ourselves.
+
 const server = createServer(app);
 attachSocket(server);
 
-const port = 8080;
+
+const port = process.env.PORT || 8080;
+
 server.listen(port, async () => {
   console.log(`Server started on ${port}`);
   await DbConnection();

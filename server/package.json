@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Node backend for TxLINE — proxies the TxLINE REST API. Add your routes in index.js.",
+  "description": "Node backend for TxLINE \u2014 proxies the TxLINE REST API. Add your routes in index.js.",
   "scripts": {
     "dev": "node --watch index.js",
     "start": "node index.js"
@@ -20,5 +20,8 @@
     "drizzle-kit": "1.0.0-rc.4",
     "socket.io-client": "^4.8.3",
     "tsx": "^4.23.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
