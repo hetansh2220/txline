@@ -30,7 +30,10 @@ export function ContestLeaderboard({
     return (
         <section className="overflow-hidden rounded-2xl border border-border bg-card">
             {contest.entries.map((e, i) => {
-                const won = e.points > 0;
+                const totalPts = e.points ?? 0;
+                const entryPts = e.entryPoints ?? 0;
+                const windowPts = e.windowPoints ?? 0;
+                const won = totalPts > 0;
                 const mine = e.wallet === meWallet;
 
                 return (
@@ -51,21 +54,41 @@ export function ContestLeaderboard({
                             className="size-8 shrink-0 rounded-full bg-muted ring-1 ring-border"
                         />
 
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                            {mine ? "You" : e.username}
-                        </span>
-
-                        <span className="shrink-0 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                            {label(e.pick, home, away)}
-                        </span>
+                        <div className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">
+                                {mine ? "You" : e.username}
+                            </span>
+                            {/* Points breakdown: match pick + mini-events */}
+                            <span className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+                                <span className="shrink-0 uppercase tracking-wider">
+                                    {label(e.pick, home, away)}
+                                </span>
+                                {entryPts > 0 && (
+                                    <>
+                                        <span className="text-border">·</span>
+                                        <span className="text-emerald-400">
+                                            Pick +{entryPts}
+                                        </span>
+                                    </>
+                                )}
+                                {windowPts > 0 && (
+                                    <>
+                                        <span className="text-border">·</span>
+                                        <span className="text-amber-400">
+                                            Events +{windowPts}
+                                        </span>
+                                    </>
+                                )}
+                            </span>
+                        </div>
 
                         <span
                             className={cn(
-                                "w-12 shrink-0 text-right font-mono text-sm font-bold tabular-nums",
+                                "w-14 shrink-0 text-right font-mono text-sm font-bold tabular-nums",
                                 won ? "text-emerald-400" : "text-muted-foreground"
                             )}
                         >
-                            +{e.points}
+                            +{totalPts}
                         </span>
                     </div>
                 );

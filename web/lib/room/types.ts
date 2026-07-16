@@ -9,6 +9,10 @@ export interface RoomUser {
 
 export interface Member extends RoomUser {
     points: number;
+    /** Points from the match-winner pick (0 or 150). */
+    entryPoints?: number;
+    /** Points from mini-event prediction windows. */
+    windowPoints?: number;
     online: boolean;
     /** Their pre-match pick, once contest entries exist. */
     pick?: "home" | "draw" | "away";

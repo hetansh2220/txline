@@ -1,7 +1,19 @@
-import { sql, eq, and } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import { db } from "../config/db.js";
 import { users, entries, predictionWindows, predictions } from "../db/schema.js";
 import { kindOf } from "./parse.js";
+
+/** TxLINE sends PascalCase in practice; OpenAPI uses lowercase — accept both. */
+const seqOf = (ev) => {
+    const s = ev?.Seq ?? ev?.seq;
+    const n = typeof s === "number" ? s : Number(s);
+    return Number.isFinite(n) ? n : null;
+};
+
+const clockOf = (ev) => {
+    const c = ev?.Clock?.Seconds ?? ev?.clock?.Seconds ?? ev?.clock?.seconds;
+    return typeof c === "number" ? c : null;
+};
 
 /**
  * Rolling live Yes/No windows driven by TxLINE Clock.Seconds + Seq.
@@ -267,6 +279,10 @@ export async function submitPrediction(user, matchId, windowId, guess) {
 
 /**
  * Poll/SSE handler: filter Seq > lastSeenSeq, sort ascending, walk all of them.
+ *
+ * Clock is advanced from EVERY update (Seq or not) so timeouts still fire even
+ * when Seq is missing/lowercase or a reconnect re-sends old Seq numbers — the UI
+ * clock and the resolver must stay in lockstep.
  */
 export async function processNewEvents(matchId, allEvents) {
     matchId = Number(matchId);
@@ -274,30 +290,29 @@ export async function processNewEvents(matchId, allEvents) {
     if (!game || game.closed) return;
 
     const list = Array.isArray(allEvents) ? allEvents : [allEvents];
-    const fresh = list
-        .filter((e) => typeof e?.Seq === "number" && e.Seq > game.lastSeenSeq)
-        .sort((a, b) => a.Seq - b.Seq);
 
-    // Updates without Seq still advance the clock for timeout checks.
+    // Always sync the match clock first — timeouts depend on it, not on Seq.
     for (const ev of list) {
-        if (typeof ev?.Seq === "number") continue;
-        if (typeof ev?.Clock?.Seconds === "number") {
-            game.currentClock = ev.Clock.Seconds;
-        }
+        const clock = clockOf(ev);
+        if (clock !== null) game.currentClock = clock;
     }
 
-    for (const ev of fresh) {
-        game.lastSeenSeq = Math.max(game.lastSeenSeq, ev.Seq);
+    const fresh = list
+        .map((e) => ({ e, seq: seqOf(e) }))
+        .filter(({ seq }) => seq !== null && seq > game.lastSeenSeq)
+        .sort((a, b) => a.seq - b.seq);
 
-        if (typeof ev.Clock?.Seconds === "number") {
-            game.currentClock = ev.Clock.Seconds;
-        }
+    for (const { e: ev, seq } of fresh) {
+        game.lastSeenSeq = Math.max(game.lastSeenSeq, seq);
 
-        if (ev.Action === "action_discarded") continue;
+        const clock = clockOf(ev);
+        if (clock !== null) game.currentClock = clock;
 
-        if (ev.Action === "game_finalised") {
+        const action = ev.Action ?? ev.action;
+        if (action === "action_discarded") continue;
+
+        if (action === "game_finalised") {
             game.finished = true;
-            // Close any open window as FALSE at full time.
             if (game.row && game.row.status !== "resolved") {
                 await resolveWindow(game.row.id, false);
             }
@@ -306,14 +321,14 @@ export async function processNewEvents(matchId, allEvents) {
 
         const row = game.row;
         if (row && row.status !== "resolved" && !game.resolving) {
-            const kind = kindOf(ev.Action, ev.Data ?? {});
-            const clock = ev.Clock?.Seconds;
+            const kind = kindOf(action, ev.Data ?? ev.data ?? {});
+            const eventClock = clockOf(ev);
             if (
                 kind &&
-                typeof clock === "number" &&
+                eventClock !== null &&
                 matchesType(row.eventType, kind) &&
-                clock >= row.windowStartClock &&
-                clock <= row.windowEndClock
+                eventClock >= row.windowStartClock &&
+                eventClock <= row.windowEndClock
             ) {
                 await resolveWindow(row.id, true);
                 continue;
@@ -323,20 +338,28 @@ export async function processNewEvents(matchId, allEvents) {
         await checkWindowTimeouts(matchId, game.currentClock);
     }
 
+    // Updates with no new Seq (clock ticks only, or missing Seq) still need this.
     await checkWindowTimeouts(matchId, game.currentClock);
 }
 
+/**
+ * Also called from the socket layer on every match:state tick so the window
+ * resolves even if the Seq filter missed an update the UI already reflected.
+ */
 export async function checkWindowTimeouts(matchId, currentClockSeconds) {
     matchId = Number(matchId);
     const game = games.get(matchId);
     if (!game?.row || game.row.status === "resolved" || game.resolving) return;
 
-    const clock =
-        typeof currentClockSeconds === "number"
-            ? currentClockSeconds
-            : game.currentClock;
+    if (typeof currentClockSeconds === "number") {
+        game.currentClock = currentClockSeconds;
+    }
 
-    if (clock > game.row.windowEndClock) {
+    const clock = game.currentClock;
+
+    // Spec: FALSE once the clock passes the end. Treat equality as done too —
+    // otherwise the card can sit on "0s left" forever.
+    if (clock >= game.row.windowEndClock) {
         await resolveWindow(game.row.id, false);
     }
 }
@@ -368,7 +391,7 @@ export async function resolveWindow(windowId, result) {
             .where(
                 and(
                     eq(predictionWindows.id, windowId),
-                    sql`${predictionWindows.status} <> 'resolved'`
+                    ne(predictionWindows.status, "resolved")
                 )
             )
             .returning();

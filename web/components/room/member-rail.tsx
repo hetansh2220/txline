@@ -31,8 +31,7 @@ export function MemberRail({
         <aside className="flex max-h-full w-full flex-col self-start overflow-hidden rounded-2xl border border-border bg-card">
             <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3.5">
                 <span className="font-heading text-xs font-bold tracking-widest uppercase">
-                    In the room
-
+                    Leaderboard
                 </span>
                 {onlineCount > 0 && (
                     <span className="flex items-center gap-1.5 font-mono text-xs text-emerald-500">
@@ -43,43 +42,65 @@ export function MemberRail({
             </header>
 
             <div className="flex min-h-0 flex-col gap-0.5 overflow-y-auto p-2">
-                {ranked.map((m, i) => (
-                    <div
-                        key={m.wallet}
-                        className={cn(
-                            "flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors",
-                            m.wallet === meWallet ? "bg-muted" : "hover:bg-muted/50"
-                        )}
-                    >
-                        <span className="w-4 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-                            {i + 1}
-                        </span>
+                {ranked.map((m, i) => {
+                    const entryPts = m.entryPoints ?? 0;
+                    const windowPts = m.windowPoints ?? 0;
+                    const hasBreakdown = entryPts > 0 || windowPts > 0;
 
-                        <span className="relative shrink-0">
-                            <img
-                                src={avatarUrl(m.wallet)}
-                                alt=""
-                                className={cn("size-7 rounded-full bg-muted ring-1 ring-border", !m.online && "grayscale")}
-                            />
-                            <span
-                                className={cn(
-                                    "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
-                                    m.online ? "bg-emerald-500" : "bg-muted-foreground/40"
+                    return (
+                        <div
+                            key={m.wallet}
+                            className={cn(
+                                "flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors",
+                                m.wallet === meWallet ? "bg-muted" : "hover:bg-muted/50"
+                            )}
+                        >
+                            <span className="w-4 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                                {i + 1}
+                            </span>
+
+                            <span className="relative shrink-0">
+                                <img
+                                    src={avatarUrl(m.wallet)}
+                                    alt=""
+                                    className={cn("size-7 rounded-full bg-muted ring-1 ring-border", !m.online && "grayscale")}
+                                />
+                                <span
+                                    className={cn(
+                                        "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-card",
+                                        m.online ? "bg-emerald-500" : "bg-muted-foreground/40"
+                                    )}
+                                />
+                            </span>
+
+                            <div className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium">
+                                    {m.wallet === meWallet ? "You" : m.username}
+                                </span>
+                                {hasBreakdown && (
+                                    <span className="flex items-center gap-1 font-mono text-[9px] text-muted-foreground">
+                                        {m.pick && <Pick pick={m.pick} home={home} away={away} />}
+                                        {entryPts > 0 && (
+                                            <span className="text-emerald-400/80">+{entryPts}</span>
+                                        )}
+                                        {windowPts > 0 && (
+                                            <>
+                                                {entryPts > 0 && <span className="text-border">·</span>}
+                                                <span className="text-amber-400/80">⚡{windowPts}</span>
+                                            </>
+                                        )}
+                                    </span>
                                 )}
-                            />
-                        </span>
+                            </div>
 
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                            {m.wallet === meWallet ? "You" : m.username}
-                        </span>
+                            {!hasBreakdown && m.pick && <Pick pick={m.pick} home={home} away={away} />}
 
-                        {m.pick && <Pick pick={m.pick} home={home} away={away} />}
-
-                        <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-emerald-500">
-                            {m.points.toLocaleString()}
-                        </span>
-                    </div>
-                ))}
+                            <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-emerald-500">
+                                {m.points.toLocaleString()}
+                            </span>
+                        </div>
+                    );
+                })}
             </div>
         </aside>
     );

@@ -10,8 +10,12 @@ export interface ContestEntry {
     wallet: string;
     username: string;
     pick: Pick;
-    /** Points from THIS match. */
+    /** Combined points: entryPoints + windowPoints. */
     points: number;
+    /** Points from the match-winner pick (0 or 150). */
+    entryPoints?: number;
+    /** Points earned from mini-event prediction windows. */
+    windowPoints?: number;
     settled: boolean;
     /** Lifetime points. */
     total: number;

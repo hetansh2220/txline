@@ -245,7 +245,7 @@ function PickCard({
                     Your pick
                 </span>
                 <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
-                    +15 PTS
+                    +150 PTS
                 </span>
             </div>
 
@@ -297,7 +297,7 @@ function PickCard({
                                 {confirming ? nameOf(confirming) : ""}
                             </span>
                             . You can change it until kickoff — after that it&apos;s locked.
-                            A correct call is worth 15 points.
+                            A correct call is worth 150 points.
                         </DialogDescription>
                     </DialogHeader>
 

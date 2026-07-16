@@ -71,7 +71,7 @@ export function JoinDialog({
                     <span className="flex items-center gap-2">
                         <DialogTitle className="font-heading text-xl">Join contest</DialogTitle>
                         <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-bold tracking-wider text-emerald-400">
-                            +15 PTS
+                            +150 PTS
                         </span>
                     </span>
                     <DialogDescription className="text-sm">
@@ -79,7 +79,7 @@ export function JoinDialog({
                         <span className="font-medium text-foreground">
                             {home} v {away}
                         </span>
-                        . Get it right and you take 15 points.
+                        . Get it right and you take 150 points.
                     </DialogDescription>
                 </DialogHeader>
 

@@ -10,6 +10,7 @@ import {
     guessOf,
     submitPrediction,
     processNewEvents,
+    checkWindowTimeouts,
     matchLeaderboard,
     setWindowEmitter,
 } from "./live/windows.js";
@@ -47,11 +48,12 @@ export async function buildMembers(fixtureId) {
 
     // Entrants already cover contest members; overlay online flags.
     const members = board.map((e) => {
-        // Look up user id for online check via a second path — entrants query had id.
         return {
             wallet: e.wallet,
             username: e.username,
             points: e.totalPoints ?? e.points ?? 0,
+            entryPoints: e.entryPoints ?? 0,
+            windowPoints: e.windowPoints ?? 0,
             pick: e.pick,
             online: false, // filled below
         };
@@ -85,6 +87,8 @@ export async function buildMembers(fixtureId) {
                 wallet: u.wallet,
                 username: u.username,
                 points: 0,
+                entryPoints: 0,
+                windowPoints: 0,
                 pick: undefined,
                 online: true,
             });
@@ -126,13 +130,18 @@ export function attachSocket(server) {
         // later than it was.
         if (!event) {
             io.to(roomIdFor(fixtureId)).emit("match:state", { state: wire });
-            return;
+        } else {
+            io.to(roomIdFor(fixtureId)).emit("match:event", { event, state: wire });
         }
 
-        io.to(roomIdFor(fixtureId)).emit("match:event", { event, state: wire });
+        // Same clock the UI just painted — if it crossed the window end, resolve.
+        // Don't await: a slow DB resolve must not stall the SSE reader.
+        checkWindowTimeouts(fixtureId, state.clockSeconds ?? 0).catch((e) =>
+            console.log(`[windows] ${fixtureId} timeout check: ${e.message}`)
+        );
     });
 
-    // Raw TxLINE batch → Seq/clock-based window resolution.
+    // Raw TxLINE batch → Seq/clock-based window resolution (goals + timeouts).
     setRawUpdateHandler((fixtureId, batch) => processNewEvents(fixtureId, batch));
 
     setWindowEmitter(

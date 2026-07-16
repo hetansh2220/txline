@@ -4,7 +4,7 @@ import { users, entries } from "../db/schema.js";
 import { txlineHeaders } from "../config/txline.js";
 
 const txline = process.env.TXLINE_ORIGIN;
-const CORRECT_POINTS = 15;
+const CORRECT_POINTS = 150;
 
 /**
  * The final score, straight from TxLINE — NOT from anything the client sends, and
@@ -74,26 +74,53 @@ async function finalScore(req, fixtureId) {
 }
 
 async function leaderboardOf(fixtureId) {
+    fixtureId = Number(fixtureId);
+
     const rows = await db
         .select({
+            userId: entries.userId,
             wallet: users.wallet,
             username: users.username,
             pick: entries.pick,
-            points: entries.points,
+            entryPoints: entries.points,
             settled: entries.settled,
             total: users.points,
         })
         .from(entries)
         .innerJoin(users, eq(entries.userId, users.id))
-        .where(eq(entries.fixtureId, Number(fixtureId)));
+        .where(eq(entries.fixtureId, fixtureId));
 
-    // Winners first, then by lifetime points so the order is stable.
-    rows.sort((a, b) => b.points - a.points || b.total - a.total);
+    // Sum mini-event prediction points per user for this fixture.
+    const { predictions } = await import("../db/schema.js");
+    const windowPts = await db
+        .select({
+            userId: predictions.userId,
+            pts: sql`coalesce(sum(${predictions.pointsEarned}), 0)`.mapWith(Number),
+        })
+        .from(predictions)
+        .where(eq(predictions.fixtureId, fixtureId))
+        .groupBy(predictions.userId);
+
+    const byUser = new Map(windowPts.map((r) => [r.userId, r.pts]));
+
+    const enriched = rows.map((r) => ({
+        wallet: r.wallet,
+        username: r.username,
+        pick: r.pick,
+        entryPoints: r.entryPoints ?? 0,
+        windowPoints: byUser.get(r.userId) ?? 0,
+        points: (r.entryPoints ?? 0) + (byUser.get(r.userId) ?? 0),
+        settled: r.settled,
+        total: r.total,
+    }));
+
+    // Sort by combined total, then lifetime points for tie-breaking.
+    enriched.sort((a, b) => b.points - a.points || b.total - a.total);
 
     const distribution = { home: 0, draw: 0, away: 0 };
-    for (const r of rows) distribution[r.pick] = (distribution[r.pick] ?? 0) + 1;
+    for (const r of enriched) distribution[r.pick] = (distribution[r.pick] ?? 0) + 1;
 
-    return { entries: rows, distribution };
+    return { entries: enriched, distribution };
 }
 
 /**

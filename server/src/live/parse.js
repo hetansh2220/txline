@@ -113,8 +113,11 @@ export function applyUpdate(state, update) {
         state.minute = Math.ceil(seconds / 60);
         state.clockSeconds = seconds;
     }
-    if (typeof update.Seq === "number") {
-        state.lastSeq = Math.max(state.lastSeq ?? 0, update.Seq);
+    const seq = update.Seq ?? update.seq;
+    if (typeof seq === "number") {
+        state.lastSeq = Math.max(state.lastSeq ?? 0, seq);
+    } else if (seq != null && Number.isFinite(Number(seq))) {
+        state.lastSeq = Math.max(state.lastSeq ?? 0, Number(seq));
     }
     if (action === "game_finalised") state.finished = true;
 
