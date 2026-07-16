@@ -2,9 +2,9 @@
 
 **Predict live. Beat the room.**
 
-Live football prediction contests on Solana. Pick a winner before kickoff, watch the
-match unfold with everyone else in the room, and climb the leaderboard when you call it
-right.
+Live football prediction contests on Solana. Pick a winner before kickoff, play live
+micro-prediction games during the match, and climb the leaderboard when you call it
+right—all while chatting with other fans in the room.
 
 Built on the [TxLINE](https://txline.txodds.com) on-chain sports oracle by TxODDS.
 
@@ -15,7 +15,7 @@ Built on the [TxLINE](https://txline.txodds.com) on-chain sports oracle by TxODD
 | Stage | What happens |
 |---|---|
 | **Upcoming** | Join a contest by picking Home / Draw / Away. Entries **lock at kickoff**. |
-| **Live** | Chat in the match room — presence, replies, emoji, GIFs. |
+| **Live** | Chat in the match room, play live micro-prediction games, and see real-time match events. |
 | **Full time** | The contest **settles automatically** from the final score. A correct call is worth **15 points**. |
 | **After** | Match timeline, team stats, per-match leaderboard, and an all-time global ranking. |
 
@@ -181,23 +181,8 @@ letting anyone embed an arbitrary image, or a tracking pixel, just by typing a l
 everyone out. The write is guarded on `settled = false`, so concurrent callers cannot
 double-pay. No cron, no job queue.
 
----
-
-## Known limitations
-
-- **Socket auth trusts the claimed wallet.** The handshake resolves `{ wallet }` to a user
-  without proving ownership of it. The fix is a signed nonce verified with `tweetnacl`.
-- **The TxLINE guest JWT expires after 30 days** and there is no refresh path, so
-  credentials eventually go stale.
-- **Every user must activate on-chain**, which costs devnet SOL — a visitor with an
-  unfunded wallet cannot load match data.
-
----
-
 ## Roadmap
 
-- **Live micro-predictions** during a match ("what happens next?"), scored from the live
-  event stream
 - **Replay mode** — stream a recorded match through the same pipeline, so the live loop is
   demoable without a live fixture
 - **On-chain settlement** via TxLINE's `validateStat()` oracle, so results are verified on
