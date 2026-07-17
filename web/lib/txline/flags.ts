@@ -72,6 +72,8 @@ const CODES: Record<string, string> = {
     Scotland: "gb-sct",
     England: "gb-eng",
     Wales: "gb-wls",
+    Liechtenstein: "li",
+    Gibraltar: "gi",
 };
 
 /** ISO code for a team (for flagcdn image), or null if unknown. */
@@ -89,6 +91,8 @@ const EMOJI: Record<string, string> = {
     cn: "🇨🇳", eg: "🇪🇬", cl: "🇨🇱", pe: "🇵🇪", se: "🇸🇪", no: "🇳🇴", at: "🇦🇹", tr: "🇹🇷",
     gr: "🇬🇷", ua: "🇺🇦", py: "🇵🇾", cv: "🇨🇻", dz: "🇩🇿", cd: "🇨🇩", ci: "🇨🇮", za: "🇿🇦",
     jo: "🇯🇴", uz: "🇺🇿", nz: "🇳🇿", pa: "🇵🇦", iq: "🇮🇶", cw: "🇨🇼",
+    li: "🇱🇮",
+    gi: "🇬🇮",
 };
 
 export function teamFlag(name?: string): string {
