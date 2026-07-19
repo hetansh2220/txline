@@ -107,8 +107,7 @@ export default function ProfilePage() {
         <Stat label="Streak" value={`${streak}${streak > 0 ? "🔥" : ""}`} />
       </div>
 
-      {/* Optional on-chain subscription — nothing in the app depends on it. */}
-      <ActivateCard />
+
 
       <ProfileDialog wallet={wallet} open={setup} onOpenChange={setSetup} initial={profile} required />
     </main>

@@ -83,7 +83,7 @@ export function MatchCard({
                 {isFinalMatch ? (
                     <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wide text-amber-300 uppercase">
                         <Trophy className="size-3.5" />
-                        World cup Final
+                        World Cup Final
                     </span>
                 ) : (
                     <span className="font-mono text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
